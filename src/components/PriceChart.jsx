@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload, label, prefix, precision }) {
   if (!active || !payload?.length) return null
   return (
     <div
@@ -20,13 +20,14 @@ function CustomTooltip({ active, payload, label }) {
         {label}
       </div>
       <div className="tabular" style={{ fontWeight: 600 }}>
-        ${payload[0].value.toFixed(2)}
+        {prefix}
+        {payload[0].value.toFixed(precision)}
       </div>
     </div>
   )
 }
 
-export default function StockChart({ symbol, data }) {
+export default function PriceChart({ symbol, data, prefix = '', precision = 2 }) {
   const [showTable, setShowTable] = useState(false)
 
   if (!data || data.length === 0) {
@@ -59,10 +60,13 @@ export default function StockChart({ symbol, data }) {
               tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              width={56}
-              tickFormatter={(v) => `$${v.toFixed(0)}`}
+              width={64}
+              tickFormatter={(v) => `${prefix}${v.toFixed(precision === 2 ? 0 : precision)}`}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--baseline)' }} />
+            <Tooltip
+              content={<CustomTooltip prefix={prefix} precision={precision} />}
+              cursor={{ stroke: 'var(--baseline)' }}
+            />
             <Area
               type="monotone"
               dataKey="close"
@@ -105,16 +109,16 @@ export default function StockChart({ symbol, data }) {
                 <tr key={row.date}>
                   <td style={{ padding: '4px 8px' }}>{row.date}</td>
                   <td className="tabular" style={{ padding: '4px 8px', textAlign: 'right' }}>
-                    {row.open.toFixed(2)}
+                    {row.open.toFixed(precision)}
                   </td>
                   <td className="tabular" style={{ padding: '4px 8px', textAlign: 'right' }}>
-                    {row.high.toFixed(2)}
+                    {row.high.toFixed(precision)}
                   </td>
                   <td className="tabular" style={{ padding: '4px 8px', textAlign: 'right' }}>
-                    {row.low.toFixed(2)}
+                    {row.low.toFixed(precision)}
                   </td>
                   <td className="tabular" style={{ padding: '4px 8px', textAlign: 'right' }}>
-                    {row.close.toFixed(2)}
+                    {row.close.toFixed(precision)}
                   </td>
                 </tr>
               ))}

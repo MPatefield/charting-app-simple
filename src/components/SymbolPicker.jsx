@@ -1,28 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
-import { searchSymbols } from '../finnhub.js'
 
-export default function SymbolSearch({ apiKey, onSelect }) {
+// Crypto symbol lists (Binance via Finnhub) run into the thousands, so cap
+// suggestions and prefer common USD/USDT-quoted pairs until the user types.
+function rank(symbols, query) {
+  const q = query.trim().toLowerCase()
+  const pool = q
+    ? symbols.filter(
+        (s) =>
+          s.displaySymbol.toLowerCase().includes(q) ||
+          s.description?.toLowerCase().includes(q)
+      )
+    : symbols.filter((s) => /usdt?$/i.test(s.displaySymbol.replace(/[/_]/g, '')))
+  return pool.slice(0, 8)
+}
+
+export default function SymbolPicker({ symbols, loading, onSelect }) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
   const [open, setOpen] = useState(false)
   const containerRef = useRef(null)
 
-  useEffect(() => {
-    if (query.trim().length < 1) {
-      setResults([])
-      return
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const matches = await searchSymbols(query.trim(), apiKey)
-        setResults(matches.slice(0, 8))
-        setOpen(true)
-      } catch {
-        setResults([])
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [query, apiKey])
+  const results = symbols ? rank(symbols, query) : []
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -36,36 +33,28 @@ export default function SymbolSearch({ apiKey, onSelect }) {
 
   function pick(result) {
     setQuery('')
-    setResults([])
     setOpen(false)
-    onSelect(result.symbol)
-  }
-
-  function submitRaw(e) {
-    e.preventDefault()
-    if (!query.trim()) return
-    pick({ symbol: query.trim().toUpperCase() })
+    onSelect(result)
   }
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
-      <form onSubmit={submitRaw}>
-        <input
-          type="text"
-          placeholder="Search symbol, e.g. AAPL"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => results.length > 0 && setOpen(true)}
-          style={{
-            width: '100%',
-            padding: '10px 12px',
-            borderRadius: 8,
-            border: '1px solid var(--border)',
-            background: 'var(--surface-1)',
-            color: 'var(--text-primary)',
-          }}
-        />
-      </form>
+      <input
+        type="text"
+        placeholder={loading ? 'Loading symbols…' : 'Search symbol, e.g. BTC or EUR/USD'}
+        value={query}
+        disabled={loading}
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => setOpen(true)}
+        style={{
+          width: '100%',
+          padding: '10px 12px',
+          borderRadius: 8,
+          border: '1px solid var(--border)',
+          background: 'var(--surface-1)',
+          color: 'var(--text-primary)',
+        }}
+      />
       {open && results.length > 0 && (
         <ul
           className="card"
@@ -99,7 +88,7 @@ export default function SymbolSearch({ apiKey, onSelect }) {
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--page)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
-                <strong>{r.symbol}</strong>{' '}
+                <strong>{r.displaySymbol}</strong>{' '}
                 <span className="secondary">{r.description}</span>
               </button>
             </li>

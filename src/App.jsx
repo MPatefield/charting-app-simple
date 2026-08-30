@@ -1,143 +1,69 @@
 import { useEffect, useState } from 'react'
-import ApiKeyGate, { loadStoredApiKey } from './components/ApiKeyGate.jsx'
-import AssetTypeTabs from './components/AssetTypeTabs.jsx'
-import SymbolPicker from './components/SymbolPicker.jsx'
-import QuoteCard from './components/QuoteCard.jsx'
-import RangeSelector from './components/RangeSelector.jsx'
-import PriceChart from './components/PriceChart.jsx'
-import { getSymbols, getCandles, deriveQuote, FinnhubError } from './finnhub.js'
+import LayoutPicker from './components/LayoutPicker.jsx'
+import ChartPane from './components/ChartPane.jsx'
+import { DEFAULT_SYMBOLS } from './symbols.js'
+import { loadLayout, saveLayout } from './layoutStorage.js'
 
-const LAST_SYMBOL_KEY = 'last_symbol_v2'
-
-const DEFAULTS = {
-  crypto: { symbol: 'BINANCE:BTCUSDT', displaySymbol: 'BTCUSDT', description: 'Bitcoin / TetherUS' },
-  forex: { symbol: 'OANDA:EUR_USD', displaySymbol: 'EUR/USD', description: 'Euro / US Dollar' },
+function initialLayout() {
+  const saved = loadLayout()
+  if (saved) return saved
+  return { count: 4, symbols: DEFAULT_SYMBOLS.slice(0, 4) }
 }
 
-const DISPLAY = {
-  crypto: { prefix: '$', precision: 2 },
-  forex: { prefix: '', precision: 4 },
-}
-
-function loadLastSelection() {
-  try {
-    const raw = localStorage.getItem(LAST_SYMBOL_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch {
-    return {}
+// Reconciles a new pane count against the existing symbol choices, keeping
+// what's already picked and filling new panes from the defaults.
+function resizeSymbols(symbols, count) {
+  const next = symbols.slice(0, count)
+  let i = 0
+  while (next.length < count) {
+    const candidate = DEFAULT_SYMBOLS[i % DEFAULT_SYMBOLS.length]
+    if (!next.includes(candidate)) next.push(candidate)
+    i += 1
   }
+  return next
 }
+
+const GRID_COLUMNS = { 1: 1, 2: 2, 4: 2, 6: 3, 8: 4 }
 
 export default function App() {
-  const [apiKey, setApiKey] = useState(loadStoredApiKey)
-  const [assetType, setAssetType] = useState('crypto')
-  const [selection, setSelection] = useState(() => {
-    const last = loadLastSelection()
-    return { crypto: last.crypto ?? DEFAULTS.crypto, forex: last.forex ?? DEFAULTS.forex }
-  })
+  const [layout, setLayout] = useState(initialLayout)
 
-  const [symbolLists, setSymbolLists] = useState({ crypto: null, forex: null })
-  const [symbolsError, setSymbolsError] = useState('')
-
-  const [range, setRange] = useState('3M')
-  const [candles, setCandles] = useState([])
-  const [candlesLoading, setCandlesLoading] = useState(false)
-  const [candlesError, setCandlesError] = useState('')
-
-  const active = selection[assetType]
-  const { prefix, precision } = DISPLAY[assetType]
-
-  // Load the symbol list for an asset type once, on first use.
   useEffect(() => {
-    if (!apiKey || symbolLists[assetType] !== null) return
-    let cancelled = false
-    setSymbolsError('')
-    getSymbols(assetType, apiKey)
-      .then((list) => {
-        if (cancelled) return
-        setSymbolLists((prev) => ({ ...prev, [assetType]: list }))
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setSymbolsError(err instanceof FinnhubError ? err.message : 'Failed to load symbol list')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [apiKey, assetType, symbolLists])
+    saveLayout(layout)
+  }, [layout])
 
-  // Load candles for the active symbol/range.
-  useEffect(() => {
-    if (!apiKey || !active) return
-    let cancelled = false
-    setCandlesLoading(true)
-    setCandlesError('')
+  function handleCountChange(count) {
+    setLayout((prev) => ({ count, symbols: resizeSymbols(prev.symbols, count) }))
+  }
 
-    getCandles(assetType, active.symbol, range, apiKey)
-      .then((c) => {
-        if (cancelled) return
-        if (c.length === 0) {
-          setCandlesError(`No candle data returned for ${active.displaySymbol}`)
-        }
-        setCandles(c)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setCandlesError(err instanceof FinnhubError ? err.message : 'Something went wrong')
-        setCandles([])
-      })
-      .finally(() => {
-        if (!cancelled) setCandlesLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [apiKey, assetType, active, range])
-
-  function selectSymbol(result) {
-    setSelection((prev) => {
-      const next = { ...prev, [assetType]: result }
-      try {
-        localStorage.setItem(LAST_SYMBOL_KEY, JSON.stringify(next))
-      } catch {
-        // ignore
-      }
-      return next
+  function handleSymbolChange(index, symbol) {
+    setLayout((prev) => {
+      const symbols = [...prev.symbols]
+      symbols[index] = symbol
+      return { ...prev, symbols }
     })
   }
 
-  const quote = deriveQuote(candles)
-
   return (
     <>
-      <h1>Live Crypto & Forex Charts</h1>
-      <div className="stack">
-        {!apiKey && <ApiKeyGate onSave={setApiKey} />}
-
-        {apiKey && (
-          <>
-            <AssetTypeTabs value={assetType} onChange={setAssetType} />
-            <SymbolPicker
-              symbols={symbolLists[assetType]}
-              loading={symbolLists[assetType] === null}
-              onSelect={selectSymbol}
-            />
-
-            {symbolsError && <p className="error-text">{symbolsError}</p>}
-            {candlesError && <p className="error-text">{candlesError}</p>}
-            {candlesLoading && !quote && <p className="muted">Loading {active.displaySymbol}…</p>}
-
-            {quote && (
-              <QuoteCard label={active.description || active.displaySymbol} quote={quote} prefix={prefix} precision={precision} />
-            )}
-
-            <div className="card stack">
-              <RangeSelector value={range} onChange={setRange} />
-              <PriceChart symbol={active.displaySymbol} data={candles} prefix={prefix} precision={precision} />
-            </div>
-          </>
-        )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h1 style={{ margin: 0 }}>Crypto & Forex Charts</h1>
+        <LayoutPicker value={layout.count} onChange={handleCountChange} />
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${GRID_COLUMNS[layout.count]}, 1fr)`,
+          gap: 16,
+        }}
+      >
+        {layout.symbols.map((symbol, index) => (
+          <ChartPane
+            key={index}
+            symbol={symbol}
+            onSymbolChange={(next) => handleSymbolChange(index, next)}
+          />
+        ))}
       </div>
     </>
   )

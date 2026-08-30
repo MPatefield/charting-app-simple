@@ -1,17 +1,18 @@
-const RANGES = ['1M', '3M', '6M', '1Y', '5Y']
+const COUNTS = [1, 2, 4, 6, 8]
 
-export default function RangeSelector({ value, onChange }) {
+export default function LayoutPicker({ value, onChange }) {
   return (
     <div style={{ display: 'flex', gap: 4 }}>
-      {RANGES.map((r) => {
-        const active = r === value
+      {COUNTS.map((n) => {
+        const active = n === value
         return (
           <button
-            key={r}
+            key={n}
             type="button"
-            onClick={() => onChange(r)}
+            onClick={() => onChange(n)}
+            title={`${n} chart${n === 1 ? '' : 's'}`}
             style={{
-              padding: '6px 12px',
+              padding: '6px 14px',
               borderRadius: 8,
               border: '1px solid var(--border)',
               background: active ? 'var(--series-1)' : 'transparent',
@@ -19,7 +20,7 @@ export default function RangeSelector({ value, onChange }) {
               fontWeight: active ? 600 : 400,
             }}
           >
-            {r}
+            {n}
           </button>
         )
       })}
